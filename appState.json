@@ -1,0 +1,320 @@
+{
+  "EDITOR_STATE": {
+    "allProjectFiles": {
+      "10e1fa39-b15c-4d5f-9a3c-2ebd2c3e043a": {
+        "id": "10e1fa39-b15c-4d5f-9a3c-2ebd2c3e043a",
+        "parent": null,
+        "name": "zipchamp",
+        "type": "DIRECTORY",
+        "isDirectory": true,
+        "children": [
+          "a9bf0d8c-3dca-4791-92e0-f4dbfd9d6234"
+        ],
+        "isRemovable": false,
+        "filePath": "zipchamp"
+      },
+      "a9bf0d8c-3dca-4791-92e0-f4dbfd9d6234": {
+        "id": "a9bf0d8c-3dca-4791-92e0-f4dbfd9d6234",
+        "parent": "10e1fa39-b15c-4d5f-9a3c-2ebd2c3e043a",
+        "name": "lambda.js",
+        "type": "LAMBDA_FILE",
+        "isDirectory": false,
+        "children": [],
+        "isRemovable": true,
+        "filePath": "zipchamp/lambda.js",
+        "code": "let AWS = require('aws-sdk');\nlet JSZip = require(\"jszip\");\nlet fs = require(\"fs\");\n\nconst s3 = new AWS.S3();\n\nexports.handler = function (event, context, callback) {\n    /* The request payload will take the following format:\n    {\n        \"path\": \"path/to/zip/file/within/bucket\",\n        \"changes\": {\n            \"path/to/new/file/1\": \"content for file 1\",\n            \"path/to/existing/file/2\": \"new content of file 2\",\n            \"path/to/deleted/file/3\": null\n        }\n    }\n     */\n\n    let changes = event.changes;\n    let modified = 0, removed = 0;\n\n    console.log(`Fetching ${event.path}`);\n    s3.getObject({\n        'Bucket': \"hosted-archives\",\n        'Key': event.path\n    }).promise()\n        .then(data => {\n            let jszip = new JSZip();\n            console.log(`Opening ${event.path}`);\n            jszip.loadAsync(data.Body).then(zip => {\n                console.log(`Opened ${event.path} as zip`);\n                Object.keys(changes).forEach(name => {\n                    if (changes[name] !== null) {\n                        console.log(`Modify ${name}`);\n                        zip.file(name, changes[name]);\n                        modified++;\n                    } else {\n                        console.log(`Remove ${name}`);\n                        zip.remove(name);\n                        removed++;\n                    }\n                });\n\n                let tmpPath = `/tmp/${event.path}`\n                console.log(`Writing to temp file ${tmpPath}`);\n                zip.generateNodeStream({ streamFiles: true })\n                    .pipe(fs.createWriteStream(tmpPath))\n                    .on('error', err => callback(err))\n                    .on('finish', function () {\n                        console.log(`Uploading to ${event.path}`);\n                        s3.putObject({\n                            \"Body\": fs.createReadStream(tmpPath),\n                            \"Bucket\": \"hosted-archives\",\n                            \"Key\": event.path,\n                            \"Metadata\": {\n                                \"Content-Length\": String(fs.statSync(tmpPath).size)\n                            }\n                        })\n                            .promise()\n                            .then(data => {\n                                console.log(`Successfully uploaded ${event.path}`);\n                                callback(null, {\n                                    added: added,\n                                    modified: modified,\n                                    removed: removed\n                                });\n                            })\n                            .catch(err => {\n                                callback(err);\n                            });\n                    });\n            })\n                .catch(err => {\n                    callback(err);\n                });\n        })\n        .catch(err => {\n            callback(err);\n        });\n}",
+        "triggers": [
+          {
+            "resourceName": "apigusEast1zipchampeditpost",
+            "config": {}
+          }
+        ],
+        "version": 3
+      }
+    },
+    "rootNode": "10e1fa39-b15c-4d5f-9a3c-2ebd2c3e043a",
+    "openFiles": [
+      "a9bf0d8c-3dca-4791-92e0-f4dbfd9d6234"
+    ],
+    "currentFileId": "a9bf0d8c-3dca-4791-92e0-f4dbfd9d6234",
+    "resources": {
+      "apigusEast1zipchampeditpost": {
+        "name": "apigusEast1zipchampeditpost",
+        "type": "API_GATEWAY",
+        "config": {
+          "selectedRegion": "us-east-1",
+          "apiMode": 0,
+          "apiName": "zipchamp",
+          "endpointType": "EDGE",
+          "resourceMode": 0,
+          "resourceName": "edit",
+          "resourcePath": "/edit",
+          "restMethod": "POST",
+          "proxyIntegration": false,
+          "enableCORS": false,
+          "stageMode": 0,
+          "stageName": "Prod"
+        },
+        "globallyEditable": true
+      },
+      "s3hostedArchives": {
+        "name": "s3hostedArchives",
+        "type": "S3",
+        "config": {
+          "mode": 1,
+          "bucket": {
+            "region": "us-east-1",
+            "name": "hosted-archives"
+          }
+        },
+        "globallyEditable": false
+      }
+    },
+    "envVariables": [
+      {
+        "lambdaId": "all",
+        "varKey": "SIGMA_AWS_ACC_ID",
+        "varValue": "",
+        "editable": false,
+        "isEditable": false
+      }
+    ],
+    "changes": 6,
+    "packageJSON": {
+      "dependencies": {
+        "aws-sdk": {
+          "name": "aws-sdk",
+          "version": "2.176.0",
+          "notRemovable": true
+        },
+        "slappforge-sdk": {
+          "name": "@slappforge/slappforge-sdk",
+          "version": "0.0.3",
+          "notRemovable": true,
+          "types": "\n                    declare class RDSQueryParams {\n    instanceIdentifier: string;\n    query: string;\n    inserts: Array<any>\n}\n\ndeclare namespace SL.AWS {\n    class RDS {\n        query(params: RDSQueryParams, callback: Function, connection: any): void;\n\n        beginTransaction(params: any, callback: Function): void;\n    }\n\n    class SQS {\n        receiveAndDeleteMessages(params: any, filteringCallBack: Function, deleteCallBack: Function, errorCallBack: Function): void;\n    }\n}\n"
+        },
+        "jszip": {
+          "name": "jszip",
+          "concatenatedName": "jszip",
+          "downloadsLast30Days": 1707321,
+          "downloadsRatio": 0.00906052661833763,
+          "humanDownloadsLast30Days": "1.7m",
+          "popular": true,
+          "version": "3.1.5",
+          "versions": {
+            "0.1.0": "2013-09-11T15:25:47.145Z",
+            "0.1.1": "2013-09-11T15:41:43.030Z",
+            "0.2.0": "2013-09-25T01:00:44.009Z",
+            "0.2.1": "2013-09-30T19:35:38.335Z",
+            "2.0.0": "2014-02-06T19:30:56.795Z",
+            "2.1.0": "2014-02-06T19:31:08.303Z",
+            "2.1.1": "2014-02-13T00:42:21.891Z",
+            "2.2.0": "2014-02-26T10:24:08.455Z",
+            "2.2.1": "2014-04-24T19:48:27.080Z",
+            "2.2.2": "2014-05-01T21:05:40.198Z",
+            "2.3.0": "2014-06-18T22:02:40.426Z",
+            "2.4.0": "2014-07-25T17:57:13.835Z",
+            "2.5.0": "2015-03-12T01:59:14.066Z",
+            "2.6.0": "2016-03-23T21:18:05.861Z",
+            "3.0.0": "2016-04-13T19:32:35.807Z",
+            "2.6.1": "2016-07-28T19:46:44.662Z",
+            "3.1.0": "2016-08-03T20:08:51.050Z",
+            "3.1.1": "2016-08-08T18:57:19.135Z",
+            "3.1.2": "2016-08-23T18:55:43.473Z",
+            "3.1.3": "2016-10-06T19:14:04.275Z",
+            "3.1.4": "2017-08-24T17:33:35.015Z",
+            "3.1.5": "2017-11-09T22:40:10.176Z"
+          },
+          "tags": {
+            "latest": "3.1.5"
+          },
+          "description": "Create, read and edit .zip files with JavaScript http://stuartk.com/jszip",
+          "dependencies": {
+            "core-js": "~2.3.0",
+            "es6-promise": "~3.0.2",
+            "lie": "~3.1.0",
+            "pako": "~1.0.2",
+            "readable-stream": "~2.0.6"
+          },
+          "devDependencies": {
+            "grunt": "~0.4.1",
+            "grunt-cli": "~1.1.0",
+            "grunt-saucelabs": "8.6.2",
+            "grunt-contrib-connect": "1.0.0",
+            "jshint": "~2.9.1",
+            "browserify": "~13.0.0",
+            "grunt-browserify": "~5.0.0",
+            "grunt-contrib-jshint": "~1.0.0",
+            "grunt-contrib-qunit": "~1.2.0",
+            "grunt-contrib-uglify": "~1.0.0",
+            "phantomjs-prebuilt": "2.1.15",
+            "jszip-utils": "~0.0.2",
+            "package-json-versionify": "1.0.2",
+            "qunit-cli": "~0.2.0",
+            "qunitjs": "~1.23.0",
+            "tmp": "0.0.28"
+          },
+          "repository": {
+            "url": "https://github.com/Stuk/jszip",
+            "project": "jszip",
+            "user": "Stuk",
+            "host": "github.com",
+            "path": "",
+            "head": "a4138a23cb9b8eb773c19af7d36d5ce2bcf4bfda",
+            "branch": "a4138a23cb9b8eb773c19af7d36d5ce2bcf4bfda"
+          },
+          "githubRepo": {
+            "user": "Stuk",
+            "project": "jszip",
+            "path": "",
+            "head": "a4138a23cb9b8eb773c19af7d36d5ce2bcf4bfda"
+          },
+          "gitHead": "a4138a23cb9b8eb773c19af7d36d5ce2bcf4bfda",
+          "readme": "JSZip [![Build Status](https://api.travis-ci.org/Stuk/jszip.svg?branch=master)](http://travis-ci.org/Stuk/jszip) [![Code Climate](https://codeclimate.com/github/Stuk/jszip/badges/gpa.svg)](https://codeclimate.com/github/Stuk/jszip)\n=====\n\n[![Selenium Test Status](https://saucelabs.com/browser-matrix/jszip.svg)](https://saucelabs.com/u/jszip)\n\nA library for creating, reading and editing .zip files with JavaScript, with a\nlovely and simple API.\n\nSee https://stuk.github.io/jszip for all the documentation.\n\n```javascript\nvar zip = new JSZip();\n\nzip.file(\"Hello.txt\", \"Hello World\\n\");\n\nvar img = zip.folder(\"images\");\nimg.file(\"smile.gif\", imgData, {base64: true});\n\nzip.generateAsync({type:\"blob\"}).then(function(content) {\n    // see FileSaver.js\n    saveAs(content, \"example.zip\");\n});\n\n/*\nResults in a zip containing\nHello.txt\nimages/\n    smile.gif\n*/\n```\nLicense\n-------\n\nJSZip is dual-licensed. You may use it under the MIT license *or* the GPLv3\nlicense. See [LICENSE.markdown](LICENSE.markdown).\n",
+          "owner": {
+            "name": "Stuk",
+            "avatar": "https://github.com/Stuk.png",
+            "link": "https://github.com/Stuk"
+          },
+          "deprecated": false,
+          "badPackage": false,
+          "homepage": null,
+          "license": "(MIT OR GPL-3.0)",
+          "keywords": [
+            "zip",
+            "deflate",
+            "inflate"
+          ],
+          "created": 1378913145354,
+          "modified": 1520627325192,
+          "lastPublisher": {
+            "name": "dduponchel",
+            "email": "d.duponchel@gmail.com",
+            "avatar": "https://gravatar.com/avatar/197913c8c04e79ab2de44614d380515c",
+            "link": "https://www.npmjs.com/~dduponchel"
+          },
+          "owners": [
+            {
+              "name": "cwmma",
+              "email": "calvin.metcalf@gmail.com",
+              "avatar": "https://gravatar.com/avatar/e8153037a068f1c32e546f82729a64a5",
+              "link": "https://www.npmjs.com/~cwmma"
+            },
+            {
+              "name": "dduponchel",
+              "email": "d.duponchel@gmail.com",
+              "avatar": "https://gravatar.com/avatar/197913c8c04e79ab2de44614d380515c",
+              "link": "https://www.npmjs.com/~dduponchel"
+            },
+            {
+              "name": "stuk",
+              "email": "stuart@stuartk.com",
+              "avatar": "https://gravatar.com/avatar/0e815006aef4a0e79d60df31b654648c",
+              "link": "https://www.npmjs.com/~stuk"
+            }
+          ],
+          "lastCrawl": "2018-03-09T20:28:45.554Z",
+          "popularName": "jszip",
+          "dependents": 504,
+          "humanDependents": "504",
+          "changelogFilename": "https://raw.githubusercontent.com/Stuk/jszip/a4138a23cb9b8eb773c19af7d36d5ce2bcf4bfda/CHANGES.md",
+          "objectID": "jszip",
+          "_highlightResult": {
+            "name": {
+              "value": "<em>jszip</em>",
+              "matchLevel": "full",
+              "fullyHighlighted": true,
+              "matchedWords": [
+                "jszip"
+              ]
+            },
+            "concatenatedName": {
+              "value": "<em>jszip</em>",
+              "matchLevel": "full",
+              "fullyHighlighted": true,
+              "matchedWords": [
+                "jszip"
+              ]
+            },
+            "description": {
+              "value": "Create, read and edit .zip files with JavaScript http://stuartk.com/<em>jszip</em>",
+              "matchLevel": "full",
+              "fullyHighlighted": false,
+              "matchedWords": [
+                "jszip"
+              ]
+            },
+            "owner": {
+              "name": {
+                "value": "Stuk",
+                "matchLevel": "none",
+                "matchedWords": []
+              }
+            },
+            "keywords": [
+              {
+                "value": "zip",
+                "matchLevel": "none",
+                "matchedWords": []
+              },
+              {
+                "value": "deflate",
+                "matchLevel": "none",
+                "matchedWords": []
+              },
+              {
+                "value": "inflate",
+                "matchLevel": "none",
+                "matchedWords": []
+              }
+            ],
+            "owners": [
+              {
+                "name": {
+                  "value": "cwmma",
+                  "matchLevel": "none",
+                  "matchedWords": []
+                }
+              },
+              {
+                "name": {
+                  "value": "dduponchel",
+                  "matchLevel": "none",
+                  "matchedWords": []
+                }
+              },
+              {
+                "name": {
+                  "value": "stuk",
+                  "matchLevel": "none",
+                  "matchedWords": []
+                }
+              }
+            ],
+            "popularName": {
+              "value": "<em>jszip</em>",
+              "matchLevel": "full",
+              "fullyHighlighted": true,
+              "matchedWords": [
+                "jszip"
+              ]
+            }
+          },
+          "types": "// Type definitions for JSZip 3.1\n// Project: http://stuk.github.com/jszip/\n// Definitions by: mzeiher <https://github.com/mzeiher>, forabi <https://github.com/forabi>\n// Definitions: https://github.com/DefinitelyTyped/DefinitelyTyped\n// TypeScript Version: 2.3\n\n/// <reference types=\"node\" />\n\ninterface JSZipSupport {\n    arraybuffer: boolean;\n    uint8array: boolean;\n    blob: boolean;\n    nodebuffer: boolean;\n}\n\ntype Compression = 'STORE' | 'DEFLATE';\n\ninterface Metadata  {\n    percent: number;\n    currentFile: string;\n}\n\ntype OnUpdateCallback = (metadata: Metadata) => void;\n\ninterface InputByType {\n    base64: string;\n    string: string;\n    text: string;\n    binarystring: string;\n    array: number[];\n    uint8array: Uint8Array;\n    arraybuffer: ArrayBuffer;\n    blob: Blob;\n}\n\ninterface OutputByType {\n    base64: string;\n    text: string;\n    binarystring: string;\n    array: number[];\n    uint8array: Uint8Array;\n    arraybuffer: ArrayBuffer;\n    blob: Blob;\n    nodebuffer: Buffer;\n}\n\ntype InputFileFormat = InputByType[keyof InputByType] | NodeJS.ReadableStream;\n\ndeclare namespace JSZip {\n    type InputType = keyof InputByType;\n\n    type OutputType = keyof OutputByType;\n\n    interface JSZipObject {\n        name: string;\n        dir: boolean;\n        date: Date;\n        comment: string;\n        /** The UNIX permissions of the file, if any. */\n        unixPermissions: number | string | null;\n        /** The UNIX permissions of the file, if any. */\n        dosPermissions: number | null;\n        options: JSZipObjectOptions;\n\n        /**\n         * Prepare the content in the asked type.\n         * @param type the type of the result.\n         * @param onUpdate a function to call on each internal update.\n         * @return Promise the promise of the result.\n         */\n        async<T extends OutputType>(type: T, onUpdate?: OnUpdateCallback): Promise<OutputByType[T]>;\n        nodeStream(type?: 'nodestream', onUpdate?: OnUpdateCallback): NodeJS.ReadableStream;\n    }\n\n    interface JSZipFileOptions {\n        /** Set to `true` if the data is `base64` encoded. For example image data from a `<canvas>` element. Plain text and HTML do not need this option. */\n        base64?: boolean;\n        /**\n         * Set to `true` if the data should be treated as raw content, `false` if this is a text. If `base64` is used,\n         * this defaults to `true`, if the data is not a `string`, this will be set to `true`.\n         */\n        binary?: boolean;\n        /**\n         * The last modification date, defaults to the current date.\n         */\n        date?: Date;\n        compression?: string;\n        comment?: string;\n        /** Set to `true` if (and only if) the input is a \"binary string\" and has already been prepared with a `0xFF` mask. */\n        optimizedBinaryString?: boolean;\n        /** Set to `true` if folders in the file path should be automatically created, otherwise there will only be virtual folders that represent the path to the file. */\n        createFolders?: boolean;\n        /** Set to `true` if this is a directory and content should be ignored. */\n        dir?: boolean;\n\n        /** 6 bits number. The DOS permissions of the file, if any. */\n        dosPermissions?: number | null;\n        /**\n         * 16 bits number. The UNIX permissions of the file, if any.\n         * Also accepts a `string` representing the octal value: `\"644\"`, `\"755\"`, etc.\n         */\n        unixPermissions?: number | string | null;\n    }\n\n    interface JSZipObjectOptions {\n        compression: Compression;\n    }\n\n    interface JSZipGeneratorOptions<T extends OutputType = OutputType> {\n        compression?: Compression;\n        compressionOptions?: null | {\n            level: number;\n        };\n        type?: T;\n        comment?: string;\n        /**\n         * mime-type for the generated file.\n         * Useful when you need to generate a file with a different extension, ie: ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ.odsÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ.\n         * @default 'application/zip'\n         */\n        mimeType?: string;\n        encodeFileName?(filename: string): string;\n        /** Stream the files and create file descriptors */\n        streamFiles?: boolean;\n        /** DOS (default) or UNIX */\n        platform?: 'DOS' | 'UNIX';\n    }\n\n    interface JSZipLoadOptions {\n        base64?: boolean;\n        checkCRC32?: boolean;\n        optimizedBinaryString?: boolean;\n        createFolders?: boolean;\n    }\n}\n\ninterface JSZip {\n    files: {[key: string]: JSZip.JSZipObject};\n\n    /**\n     * Get a file from the archive\n     *\n     * @param Path relative path to file\n     * @return File matching path, null if no file found\n     */\n    file(path: string): JSZip.JSZipObject;\n\n    /**\n     * Get files matching a RegExp from archive\n     *\n     * @param path RegExp to match\n     * @return Return all matching files or an empty array\n     */\n    file(path: RegExp): JSZip.JSZipObject[];\n\n    /**\n     * Add a file to the archive\n     *\n     * @param path Relative path to file\n     * @param data Content of the file\n     * @param options Optional information about the file\n     * @return JSZip object\n     */\n    file<T extends JSZip.InputType>(path: string, data: InputByType[T] | Promise<InputByType[T]>, options?: JSZip.JSZipFileOptions): this;\n    file<T extends JSZip.InputType>(path: string, data: null, options?: JSZip.JSZipFileOptions & { dir: true }): this;\n\n    /**\n     * Returns an new JSZip instance with the given folder as root\n     *\n     * @param name Name of the folder\n     * @return New JSZip object with the given folder as root or null\n     */\n    folder(name: string): JSZip;\n\n    /**\n     * Returns new JSZip instances with the matching folders as root\n     *\n     * @param name RegExp to match\n     * @return New array of JSZipFile objects which match the RegExp\n     */\n    folder(name: RegExp): JSZip.JSZipObject[];\n\n    /**\n     * Call a callback function for each entry at this folder level.\n     *\n     * @param callback function\n     */\n    forEach(callback: (relativePath: string, file: JSZip.JSZipObject) => void): void;\n\n    /**\n     * Get all files which match the given filter function\n     *\n     * @param predicate Filter function\n     * @return Array of matched elements\n     */\n    filter(predicate: (relativePath: string, file: JSZip.JSZipObject) => boolean): JSZip.JSZipObject[];\n\n    /**\n     * Removes the file or folder from the archive\n     *\n     * @param path Relative path of file or folder\n     * @return Returns the JSZip instance\n     */\n    remove(path: string): JSZip;\n\n    /**\n     * Generates a new archive asynchronously\n     *\n     * @param options Optional options for the generator\n     * @param onUpdate The optional function called on each internal update with the metadata.\n     * @return The serialized archive\n     */\n    generateAsync<T extends JSZip.OutputType>(options?: JSZip.JSZipGeneratorOptions<T>, onUpdate?: OnUpdateCallback): Promise<OutputByType[T]>;\n\n    /**\n     * Generates a new archive asynchronously\n     *\n     * @param options Optional options for the generator\n     * @param onUpdate The optional function called on each internal update with the metadata.\n     * @return A Node.js `ReadableStream`\n     */\n    generateNodeStream(options?: JSZip.JSZipGeneratorOptions<'nodebuffer'>, onUpdate?: OnUpdateCallback): NodeJS.ReadableStream;\n\n    /**\n     * Deserialize zip file asynchronously\n     *\n     * @param data Serialized zip file\n     * @param options Options for deserializing\n     * @return Returns promise\n     */\n    loadAsync(data: InputFileFormat, options?: JSZip.JSZipLoadOptions): Promise<JSZip>;\n\n    /**\n     * Create JSZip instance\n     */\n\n    /**\n     * Create JSZip instance\n     * If no parameters given an empty zip archive will be created\n     *\n     * @param data Serialized zip archive\n     * @param options Description of the serialized zip archive\n     */\n    new (data?: InputFileFormat, options?: JSZip.JSZipLoadOptions): this;\n\n    (): JSZip;\n\n    prototype: JSZip;\n    support: JSZipSupport;\n    external: {\n        Promise: PromiseConstructorLike;\n    };\n    version: string;\n}\n\ndeclare var JSZip: JSZip;\n\nexport = JSZip;\n",
+          "typesLocation": "https://unpkg.com/@types/jszip/index.d.ts"
+        }
+      }
+    },
+    "lambdaId": "a9bf0d8c-3dca-4791-92e0-f4dbfd9d6234",
+    "additionalFiles": []
+  },
+  "PROJECT_META": {
+    "projectName": "zipchamp",
+    "projectDescription": "Modifies zip files stored in S3, in-place!",
+    "projectVersion": "1.0.0",
+    "projectRegion": "us-east-1",
+    "repoName": "zipchamp",
+    "repoUrl": "https://github.com/janakaud/zipchamp",
+    "lastSave": 1521699326912
+  }
+}
