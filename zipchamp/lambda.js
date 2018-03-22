@@ -60,7 +60,6 @@ exports.handler = function (event, context, callback) {
                             .then(data => {
                                 console.log(`Successfully uploaded ${event.path}`);
                                 callback(null, {
-                                    added: added,
                                     modified: modified,
                                     removed: removed
                                 });
